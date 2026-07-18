@@ -80,6 +80,44 @@ Source-side checks re-run cold; everything still green, nothing to change:
   data-capable cable + badge screen on + replug.
 - No code changes required: the only remaining step is the physical deploy.
 
+## PUBLISHED v1.0.1 to the app store (2026-07-18 23:25)
+
+USB to badge #2 was still not enumerating after a 45s wait (charge-only
+cable / hub suspected). **Pivoted: pushed the fix to the app store instead**
+— both badges can now pull v1.0.1 over WiFi from the badge's built-in App
+Store, sidestepping USB entirely.
+
+What shipped (commit `fa1146d`, release `v1.0.1`):
+- All the uncommitted working-tree work is now committed: `notify.py` (new),
+  LED message-pulse wiring in `app.py`, restartable radio (`RadioBridge.stopped`
+  + `start()` clearing `_stopped`), on-screen radio diagnostics
+  (`_draw_status_bar` two-line), `gossip.take_new_messages()` bounded FIFO,
+  `hw.set_ring()` safe ring writer, `config.LED_NOTIFY_COLOR`, SETUP ESC fix.
+- **Critical fix to the v1.0.0 release:** the published v1.0.0 `app.py` was
+  17828 bytes and did NOT import `notify.py` — i.e. the store's v1.0.0 was an
+  *older* build than what was on badge #1 (19611 bytes). v1.0.1 now matches
+  the tested/deployed source exactly.
+- Added `tests/test_notify.py` (4 cases: pulse/blink, end/release, coalesce,
+  idempotent-stop) — the new module had zero coverage before; now host suite
+  is **10/10 PASS**.
+- Added `.gitattributes` (export-ignore `RESUME.md`/`PROMPT.md`/`tests/`) so
+  the release archive ships only runtime files. Verified the v1.0.1 source
+  tarball: exactly the 12 `.py`/`.json`/`.toml` + `LICENSE` + `README.md`;
+  `notify.py` present, dev docs stripped.
+- Bumped `tildagon.toml` version `1.0.0` → `1.0.1`; release tagged `v1.0.1`
+  at https://github.com/dfourn/tildagon-chat/releases/tag/v1.0.1. Repo still
+  carries the `tildagon-app` topic.
+
+### To finish interop (no longer USB-dependent)
+
+1. On **each badge**: open the App Store → Chat → Update (or reinstall) to
+   pull v1.0.1. Wait ~15 min after 23:25 for the directory to reindex.
+2. Launch Chat on both. Watch the top status line: `nr` should climb 0→1
+   within ~5s (presence beacons), and the LED ring should mint-blink when a
+   message lands.
+3. (Optional) sanity-check the directory has no parse error for the repo at
+   https://apps.badge.emfcamp.org/errors/ once reindexed.
+
 ## Key files (this session)
 
 - `radio.py` — `BLESync` (lines 246-332), `RadioBridge.update()` (385-402).
