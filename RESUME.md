@@ -6,6 +6,34 @@ Snapshot so any session (or person) can pick it up cold.
 between 2 adjacent badges."** Prior session (launch crash + keebdex typing)
 is in the section at the bottom — that work shipped and is deployed.
 
+## ⚠️ Root-cause reassessment (23:37, supersedes the "Root cause found" section)
+
+**The original "version mismatch" diagnosis (below) was WRONG or incomplete.**
+Its premise — that `twin_flame/sync_ble.py` and `infection/sync_ble.py` are
+"identical BLE pattern — proven working" — is **false**: those apps were
+**never tested on hardware** (confirmed by the user, 23:28). The code review
+that concluded "the source is correct, it's not a radio bug" was built on an
+unvalidated reference.
+
+**What actually works between these badges is Space Scanner.** Its
+`discovery.py` is the only hardware-proven BLE transport in the tree. Diffing
+Chat's `BLESync` against it surfaced two concrete divergences, fixed in v1.0.2:
+
+1. **`import bluetooth` guard**: Chat had `except ImportError` (narrow); Space
+   Scanner uses `except Exception` (broad) with an explicit comment: *"on newer
+   (2026) firmware the module exists but may raise non-ImportError during init.
+   A narrow guard would crash the app."* A non-ImportError init failure would
+   have crashed Chat at launch, not fallen back gracefully.
+2. **`set_payload` re-issue**: Space Scanner advertises a **static** payload
+   once and never changes it. Chat switches between presence and chunk adverts
+   every frame via `gap_advertise`. Some BLE stacks silently drop the new
+   payload if the old one is still active. v1.0.2 now stops the advert
+   (`gap_advertise(None)`) before re-issuing.
+
+**Status: v1.0.2 published with both fixes (10/10 host tests pass), but the
+physical two-badge interop test is STILL the only proof. Do not assume it's
+fixed until confirmed on hardware.** See "PUBLISHED v1.0.2" below.
+
 ## Reported symptom
 
 Two Tildagon badges sitting next to each other, both running Chat: a message
@@ -117,6 +145,43 @@ What shipped (commit `fa1146d`, release `v1.0.1`):
    message lands.
 3. (Optional) sanity-check the directory has no parse error for the repo at
    https://apps.badge.emfcamp.org/errors/ once reindexed.
+
+## PUBLISHED v1.0.2 — BLE radio hardening (2026-07-18 23:37)
+
+Triggered by the user correction (23:28): twin_flame/infection were NEVER
+hardware-tested, so the v1.0.1 "source is correct" conclusion was unsound.
+Diffed Chat's `BLESync` against `space_scanner/discovery.py` — the one
+proven-working BLE app on these badges — and fixed the two concrete
+divergences (commit `452e434`, release `v1.0.2`):
+
+1. `radio.py`: `import bluetooth` guard `except ImportError` -> `except
+   Exception` (matches Space Scanner; a non-ImportError init crash can no
+   longer take the whole app down).
+2. `radio.py`: `set_payload` now calls `gap_advertise(None)` before re-issuing
+   with new data (Space Scanner's payload is static; chat's switches -- some
+   BLE stacks drop the new advert if the old one is still live).
+
+Also fixed a stray `an` prefix that had corrupted `tests/test_notify.py` line 1.
+
+Host suite **10/10 PASS**. `tildagon.toml` version `1.0.1` -> `1.0.2`; release
+tagged `v1.0.2` at https://github.com/dfourn/tildagon-chat/releases/tag/v1.0.2.
+
+**WARNING: NOT YET PROVEN ON HARDWARE.** The host suite exercises the SimSync
+mesh (the codec/gossip/relay logic) but cannot exercise `BLESync` itself --
+that needs two physical badges. Both fixes are best-effort alignments with the
+proven-working reference; the real proof is the two-badge interop test after
+the store reindexes (~15 min from 23:37).
+
+### To validate v1.0.2 on hardware (the only real proof)
+1. On each badge: App Store -> Chat -> Update to v1.0.2 (after ~15 min reindex).
+2. Launch Chat on both. Top status line `nr` should climb 0->1 within ~5s.
+3. Send a message on one -- it should appear on the other within a few seconds
+   and the ring should mint-blink.
+4. If it STILL fails: the next suspect is the `gap_advertise` re-issue cost
+   itself (radio.py top comment flags this as unvalidated). The fallback would
+   be to stop switching payloads entirely and instead advertise presence at a
+   fixed cadence, carrying chunks only in the own-send burst -- closer to Space
+   Scanner's static-payload model.
 
 ## Key files (this session)
 
