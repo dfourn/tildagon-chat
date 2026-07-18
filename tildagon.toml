@@ -1,0 +1,13 @@
+[app]
+name = "Chat"
+category = "Apps"
+
+[entry]
+class = "ChatApp"
+
+[metadata]
+author = "Dan"
+license = "MIT"
+url = "https://github.com/dfourn/tildagon-chat"
+description = "Serverless P2P chat over BLE gossip. Type on the keebdexpansion (icon keys = emotes) or six-button T9. Channels, presets, mesh relay."
+version = "1.0.0"
