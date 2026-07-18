@@ -93,6 +93,11 @@ def main():
             return 1
 
         # Drive the app through screens.
+        # The launch splash auto-advances after SPLASH_MS; fast-forward it so
+        # the rest of the flow runs immediately.
+        if i == 1 and a.screen == "splash":
+            a._leave_splash()
+            print("  splash -> %s" % a.screen)
         if i == 3 and a.screen == "setup":
             # simulate finishing setup
             a.kb.text = "dan"

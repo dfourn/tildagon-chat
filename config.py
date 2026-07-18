@@ -8,7 +8,8 @@ propagation bound, not a magic tick count.
 """
 
 # --- app identity (keep in sync with tildagon.toml on each release) ---------
-APP_VERSION = "1.0.3"        # shown in the status bar; bump with tildagon.toml
+APP_VERSION = "1.0.4"        # shown on the launch splash; bump with tildagon.toml
+SPLASH_MS = 1500             # how long the launch splash holds before auto-advance
 
 # --- protocol ---------------------------------------------------------------
 MAGIC_MSG = b"CH"            # chat message chunk advert

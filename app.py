@@ -63,7 +63,7 @@ _KB_PASS = (
     "NOTHING", "CAP", "FN", "FNED",
 )
 
-SETUP, FEED, COMPOSE = "setup", "feed", "compose"
+SETUP, FEED, COMPOSE, SPLASH = "setup", "feed", "compose", "splash"
 
 
 class ChatApp(app.App):
@@ -111,9 +111,14 @@ class ChatApp(app.App):
             eventbus.on(ButtonDownEvent, self._on_key_event, self)
 
         # screen state
-        self.screen = SETUP if not nick or nick == "anon" else FEED
+        # Launch splash shows the app name + version (config.APP_VERSION) for
+        # SPLASH_MS, or until any button/keyboard edge. It then falls through
+        # to the natural first screen (SETUP if no nick yet, else FEED).
+        self._splash_next = SETUP if not nick or nick == "anon" else FEED
+        self._splash_start = hw.ticks_ms()
+        self.screen = SPLASH
         self.preset_idx = 0
-        self.kb.reset(nick if self.screen == SETUP else "")
+        self.kb.reset(nick if self._splash_next == SETUP else "")
         self.channel = channel
 
     # --- input edges ---------------------------------------------------------
@@ -137,6 +142,10 @@ class ChatApp(app.App):
 
     def _on_key_event(self, event):
         """Consume Keyboard-group buttons (keebdexpansion et al)."""
+        # Any keyboard input dismisses the splash early.
+        if self.screen == SPLASH:
+            self._leave_splash()
+            return
         btn = event.button
         find = getattr(btn, "find_parent_in_group", None)
         kbd = find("Keyboard") if find is not None else None
@@ -217,6 +226,9 @@ class ChatApp(app.App):
         return result
 
     def _dispatch(self, now, pressed):
+        if self.screen == SPLASH:
+            return self._update_splash(now, pressed)
+
         # CANCEL exits the app from the feed only (setup/compose use it for
         # backspace; keyboard ESCAPE mirrors this via _on_key_event).
         if (self.screen == FEED and pressed["CANCEL"]
@@ -233,6 +245,21 @@ class ChatApp(app.App):
         return False
 
     # --- per-screen update ---------------------------------------------------
+    def _leave_splash(self):
+        """Advance from the splash to the natural first screen."""
+        self.screen = self._splash_next
+
+    def _update_splash(self, now, pressed):
+        # Auto-advance after SPLASH_MS, or any button tap dismisses early.
+        if hw.ticks_diff(now, self._splash_start) >= config.SPLASH_MS:
+            self._leave_splash()
+            return True
+        for n in _BTN_NAMES:
+            if pressed[n]:
+                self._leave_splash()
+                break
+        return True
+
     def _update_setup(self, now, pressed):
         self._drive_kb(now, pressed, on_submit=self._finish_setup,
                        on_cancel_hold=self.kb.cancel_hold)
@@ -356,7 +383,9 @@ class ChatApp(app.App):
     def draw(self, ctx):
         ctx.save()
         ctx.rgb(*config.COL_BG).rectangle(-120, -120, 240, 240).fill()
-        if self.screen == SETUP:
+        if self.screen == SPLASH:
+            self._draw_splash(ctx)
+        elif self.screen == SETUP:
             self._draw_keyboard(ctx, "pick a nickname", "done", "clear")
         elif self.screen == FEED:
             self._draw_feed(ctx)
@@ -365,6 +394,20 @@ class ChatApp(app.App):
         ctx.text_align = ctx.LEFT
         ctx.restore()
         self.draw_overlays(ctx)
+
+    def _draw_splash(self, ctx):
+        """Launch splash: app name, tagline, and the version in one clean place."""
+        ctx.text_align = ctx.CENTER
+        ctx.rgb(*config.COL_TEXT)
+        ctx.font_size = 24
+        ctx.move_to(0, -16).text("Chat")
+        ctx.rgb(*config.COL_ACCENT)
+        ctx.font_size = config.FONT_SIZE_TITLE
+        ctx.move_to(0, 8).text("v" + config.APP_VERSION)
+        ctx.rgb(*config.COL_MUTED)
+        ctx.font_size = config.FONT_SIZE_META
+        ctx.move_to(0, 40).text("serverless P2P over BLE")
+        ctx.move_to(0, 92).text("tap to continue")
 
     def _draw_status_bar(self, ctx):
         """Top arc: radio diagnostics + nick + channel, centred at y=-92."""
@@ -383,15 +426,13 @@ class ChatApp(app.App):
             line = "NO RADIO @%s ch%d" % (
                 self.engine.nick[:8], self.channel)
         ctx.move_to(0, -92).text(line)
-        # Second diagnostic line: sync backend + BLE active + store size + id
-        # The "v" suffix shows the running app version (matches tildagon.toml),
-        # so you can tell at a glance which build is deployed on a badge.
+        # Second diagnostic line: sync backend + BLE active + store size + id.
+        # (The version lives on the launch splash, not here.)
         ctx.rgb(*config.COL_MUTED)
         ctx.move_to(0, -80).text(
-            "%s act=%d st=%d id=%x v%s" % (
+            "%s act=%d st=%d id=%x" % (
                 sync_cls[:3], int(ble_active),
-                self.engine.store_size(), self.bid & 0xFFFF,
-                config.APP_VERSION))
+                self.engine.store_size(), self.bid & 0xFFFF))
 
     def _draw_feed(self, ctx):
         self._draw_status_bar(ctx)
