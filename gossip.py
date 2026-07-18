@@ -27,6 +27,8 @@ import random
 
 from . import codec, config
 
+NEW_EVENTS_MAX = 16  # pending new-message notification events (bounded FIFO)
+
 
 # ---------------------------------------------------------------------------
 # Stored message
@@ -120,6 +122,7 @@ class GossipEngine:
         self._own_send_ts = None
         self._own_cursor = 0
         self._own_msg_id = None       # msg_id of the in-burst own message
+        self._new_events = []         # (origin_id, channel) per finalisation
         if seed is not None:
             random.seed(seed)
 
@@ -175,9 +178,23 @@ class GossipEngine:
 
         if entry.complete() and entry not in self._finalised:
             self._finalised.append(entry)
+            if len(self._new_events) < NEW_EVENTS_MAX:
+                self._new_events.append((entry.origin_id, entry.channel))
             self._enforce_cap()
             return True
         return False
+
+    def take_new_messages(self):
+        """(origin_id, channel) per message finalised since the last call.
+
+        The UI drains this to drive the LED notify pulse. Bounded FIFO
+        (oldest kept, cap NEW_EVENTS_MAX) so a backgrounded pile-up cannot
+        grow without limit; own sends never appear here because ingest_chunk
+        skips origin_id == self_id.
+        """
+        out = self._new_events
+        self._new_events = []
+        return out
 
     def ingest_presence(self, presence, now):
         """Refresh the nick directory + peer table from a presence beacon.

@@ -1,0 +1,9 @@
+# Strip dev-only files from the app-store release archive (export-ignore).
+# The badge downloads the release tree as-is, so keep it lean: runtime files
+# (app.py, codec.py, *.py, metadata.json, tildagon.toml, LICENSE) ship; dev
+# docs and test scaffolding do not. Matches the Matrix Rain approach.
+tests/ export-ignore
+PROMPT.md export-ignore
+RESUME.md export-ignore
+.gitattributes export-ignore
+.gitignore export-ignore

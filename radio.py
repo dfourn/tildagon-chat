@@ -363,10 +363,18 @@ class RadioBridge:
         self._payload = None
         self._stopped = False
 
+    @property
+    def stopped(self):
+        return self._stopped
+
     def peers(self, now):
         return self.peer_table.peers(now)
 
     def start(self, now=0):
+        # Restartable: the launcher caches app instances, so a relaunch after
+        # _exit() re-enters through here with _stopped set. Both backends
+        # support a fresh start() after stop().
+        self._stopped = False
         self._payload = self.engine.presence_beacon(now)
         return self.sync.start(self._payload)
 

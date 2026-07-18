@@ -51,6 +51,7 @@ from . import config
 from . import hw
 from . import keyboard as kbmod
 from .gossip import GossipEngine
+from .notify import LedNotifier
 from .radio import RadioBridge, make_sync
 
 _BTN_NAMES = ("UP", "DOWN", "LEFT", "RIGHT", "CONFIRM", "CANCEL")
@@ -89,7 +90,10 @@ class ChatApp(app.App):
                                    channels_bitmap=(1 << channel))
         self.bridge = RadioBridge(self.engine, make_sync())
         self._radio_ok = bool(self.bridge.start(now=hw.ticks_ms()))
-        # NOTE: chat does not use the LED ring -- do not claim/release it.
+        # LED ring: claimed only for the duration of a notify pulse; the
+        # notifier releases it (blank + PatternEnable) when the pulse ends
+        # and its writes stay inside the "No such LED"-safe indices.
+        self.led_notify = LedNotifier()
 
         # input helpers
         self.kb = kbmod.KeyboardState()
@@ -157,7 +161,10 @@ class ChatApp(app.App):
             self.hold_cancel = kbmod.HoldTracker()
             if self.screen == COMPOSE:
                 self.screen = FEED
-            elif self.screen == FEED:
+            else:
+                # FEED and SETUP: ESC leaves the app. (SETUP used to fall
+                # through, so the CANCEL parent leaked in as a backspace;
+                # backspace on the keyboard is the BACKSPACE key.)
                 self._exit()
             return
         if name == "BACKSPACE":
@@ -178,10 +185,26 @@ class ChatApp(app.App):
     # --- main loop -----------------------------------------------------------
     def update(self, delta):
         now = hw.ticks_ms()
+
+        # Relaunch-after-exit: the launcher caches the app instance, so after
+        # _exit() stopped the bridge a later foreground update() means the
+        # user launched us again -- restart the radio. (Never done from
+        # background_update: while minimised a stopped bridge stays stopped.)
+        if self.bridge.stopped:
+            self._radio_ok = bool(self.bridge.start(now=now))
+
         pressed = self._poll_edges()
 
         # Pump the radio every frame: advertise, scan/drain, ingest, tx.
         self.bridge.update(now)
+
+        # LED notify: pulse the ring when someone else's message lands on the
+        # current channel (foreground only -- while backgrounded the events
+        # queue up, bounded, and coalesce into one pulse on return).
+        for _origin_id, chan in self.engine.take_new_messages():
+            if chan == self.channel:
+                self.led_notify.notify(now)
+        self.led_notify.update(now)
 
         result = self._dispatch(now, pressed)
 
@@ -344,20 +367,28 @@ class ChatApp(app.App):
         self.draw_overlays(ctx)
 
     def _draw_status_bar(self, ctx):
-        """Top arc: nearby count + nick + channel, centred at y=-92."""
+        """Top arc: radio diagnostics + nick + channel, centred at y=-92."""
         now = hw.ticks_ms()
         ctx.font_size = config.FONT_SIZE_META
         ctx.text_align = ctx.CENTER
+        sync_cls = self.bridge.sync.__class__.__name__
+        ble_active = getattr(self.bridge.sync, "active", False)
         if self._radio_ok:
             ctx.rgb(*config.COL_MUTED)
-            line = "%d nearby   @%s  ch%d" % (
+            line = "%d nr @%s ch%d" % (
                 len(self.bridge.peers(now)),
-                self.engine.nick[:10], self.channel)
+                self.engine.nick[:8], self.channel)
         else:
             ctx.rgb(0.9, 0.4, 0.4)
-            line = "no radio   @%s  ch%d" % (
-                self.engine.nick[:10], self.channel)
+            line = "NO RADIO @%s ch%d" % (
+                self.engine.nick[:8], self.channel)
         ctx.move_to(0, -92).text(line)
+        # Second diagnostic line: sync backend + BLE active + store size + id
+        ctx.rgb(*config.COL_MUTED)
+        ctx.move_to(0, -80).text(
+            "%s act=%d st=%d id=%x" % (
+                sync_cls[:3], int(ble_active),
+                self.engine.store_size(), self.bid & 0xFFFF))
 
     def _draw_feed(self, ctx):
         self._draw_status_bar(ctx)
@@ -437,11 +468,14 @@ class ChatApp(app.App):
     # --- lifecycle niceties --------------------------------------------------
     def background_update(self, delta):
         # Keep the radio gossiping while backgrounded so the feed is fresh
-        # when the user returns.
+        # when the user returns. Never hold the ring while another app is
+        # foregrounded: end any in-flight pulse (no-op when idle).
+        self.led_notify.stop()
         self.bridge.update(hw.ticks_ms())
 
     def _exit(self):
-        # Stop the radio cleanly. (No LED ring to release -- chat never claimed it.)
+        # Stop the radio cleanly and hand back the ring if a pulse is live.
+        self.led_notify.stop()
         try:
             self.bridge.stop()
         except Exception:

@@ -73,6 +73,27 @@ def write_leds(colors):
     leds.write()
 
 
+RING_LEDS = 12  # the visible top-ring pixels; chain indices 1..12 (1-based)
+
+
+def set_ring(color):
+    """Set the 12 visible ring LEDs to one (r, g, b) 0-255 tuple.
+
+    Stays inside indices 1..12 and never raises: LED-count/indexing differs
+    between firmware versions (the "No such LED" hazard), and a notification
+    blink must never be able to crash the app.
+    """
+    if not HAS_LEDS:
+        return
+    try:
+        leds = _tildagonos.leds
+        for i in range(1, RING_LEDS + 1):
+            leds[i] = color
+        leds.write()
+    except Exception:
+        pass
+
+
 # --- 2026 frontboard touch ring ---------------------------------------------
 try:
     from frontboards.twentysix import TOUCH

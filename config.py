@@ -48,6 +48,7 @@ LED_PULSE_MS = 400
 LED_NOTIFY_COALESCE_MS = 2000
 LED_NEW_PEER_COALESCE_MS = 10000
 LED_FRAME_MS = 80
+LED_NOTIFY_COLOR = (36, 160, 120)  # 0-255 mint (dimmed COL_ACCENT); notify blink
 
 # --- persistence ------------------------------------------------------------
 NICK_PATH = "/flash/chat_nick.txt"       # remembered across launches
