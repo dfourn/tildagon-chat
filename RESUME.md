@@ -146,6 +146,44 @@ What shipped (commit `fa1146d`, release `v1.0.1`):
 3. (Optional) sanity-check the directory has no parse error for the repo at
    https://apps.badge.emfcamp.org/errors/ once reindexed.
 
+## PUBLISHED v1.0.4 — launch splash + BLESync IRQ-race fix (2026-07-19 00:31)
+
+Bundles two changes (commits `fb8b1e0` + `c1f1860`, release `v1.0.4`):
+
+1. **Launch splash screen** (the headline feature). The app version now lives
+   in one clean place: a `SPLASH` screen shown on launch for `SPLASH_MS`
+   (1500ms) or until any button/keyboard edge, then it falls through to the
+   natural first screen (SETUP if no nick, else FEED). The `v%s` suffix was
+   removed from the always-on status-bar diag line (it was duplicated there).
+   - `config.py`: new `SPLASH_MS = 1500`, `APP_VERSION` 1.0.3 -> 1.0.4.
+   - `app.py`: new `SPLASH` state + `_update_splash`/`_draw_splash`/
+     `_leave_splash`; dispatch, draw, and the keyboard event handler all
+     gate on it.
+   - `tests/smoke_app.py`: fast-forwards past the splash in the lifecycle loop.
+   - `tildagon.toml`: version 1.0.3 -> 1.0.4.
+
+2. **`BLESync.drain()` IRQ-race fix**. Switched from copy-then-rebind
+   (`out = self._buffer[:]`) to a reference swap
+   (`out = self._buffer; self._buffer = []`). The old form had a window where
+   a BLE IRQ could append to the about-to-be-orphaned list, losing a beacon;
+   the reference swap guarantees IRQ appends always land in the live list.
+   Also cheaper than a slice copy. No protocol change.
+
+### Note on v1.0.3
+v1.0.3 was tagged (`cb7ff8c`) but never turned into a GitHub release, so it
+never shipped to the app store. v1.0.4 supersedes it. The store consumes
+GitHub releases, so v1.0.3's "show version in status bar" effectively rolled
+into v1.0.4's splash (which replaced it).
+
+Host suite **10/10 PASS**. Smoke test passes with the new splash flow
+(`splash -> setup` then full setup/feed/compose cycle, no crash over 50 frames).
+
+### To validate v1.0.4 on hardware
+1. On each badge: App Store -> Chat -> Update to v1.0.4 (after ~15 min reindex).
+2. Launch Chat: you should see the splash (Chat / v1.0.4 / tagline) for ~1.5s,
+   then it auto-advances. Tapping any button skips it.
+3. No protocol change, so badges still on v1.0.2/v1.0.3 will interop fine.
+
 ## PUBLISHED v1.0.2 — BLE radio hardening (2026-07-18 23:37)
 
 Triggered by the user correction (23:28): twin_flame/infection were NEVER
