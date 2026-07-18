@@ -319,7 +319,12 @@ class BLESync(Sync):
             pass
 
     def drain(self):
-        out = self._buffer[:]
+        # Reference swap (not a copy): we hand the caller the current list and
+        # point ``self._buffer`` at a fresh one. IRQ-driven appends always land
+        # in the *live* list, so a beacon that arrives mid-drain is never lost
+        # (the old copy-then-rebind form had a tiny window where an IRQ could
+        # append to the about-to-be-orphaned list). Also cheaper than [:].
+        out = self._buffer
         self._buffer = []
         return out
 
