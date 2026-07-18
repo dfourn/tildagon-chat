@@ -236,7 +236,11 @@ class SimSync(Sync):
 try:
     import bluetooth as _bluetooth
     _HAS_BLE = True
-except ImportError:
+except Exception:
+    # Catch broadly (not just ImportError): on newer (2026) firmware the
+    # module exists but may raise non-ImportError during init. Space Scanner's
+    # discovery.py (hardware-proven) uses exactly this guard; a narrow
+    # except-ImportError would crash the app. See space_scanner/discovery.py.
     _bluetooth = None
     _HAS_BLE = False
 
@@ -304,6 +308,11 @@ class BLESync(Sync):
         if not self.active or self._ble is None:
             return
         try:
+            # Stop the current advert before re-issuing with new data. Some
+            # BLE stacks silently drop the new payload if the old one is still
+            # active. Space Scanner never changes its payload so never hits
+            # this; chat switches between presence/chunk and must be robust.
+            self._ble.gap_advertise(None)
             self._ble.gap_advertise(
                 self._adv_interval_us, adv_data=payload, connectable=False)
         except Exception:
