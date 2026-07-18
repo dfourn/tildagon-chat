@@ -384,11 +384,14 @@ class ChatApp(app.App):
                 self.engine.nick[:8], self.channel)
         ctx.move_to(0, -92).text(line)
         # Second diagnostic line: sync backend + BLE active + store size + id
+        # The "v" suffix shows the running app version (matches tildagon.toml),
+        # so you can tell at a glance which build is deployed on a badge.
         ctx.rgb(*config.COL_MUTED)
         ctx.move_to(0, -80).text(
-            "%s act=%d st=%d id=%x" % (
+            "%s act=%d st=%d id=%x v%s" % (
                 sync_cls[:3], int(ble_active),
-                self.engine.store_size(), self.bid & 0xFFFF))
+                self.engine.store_size(), self.bid & 0xFFFF,
+                config.APP_VERSION))
 
     def _draw_feed(self, ctx):
         self._draw_status_bar(ctx)

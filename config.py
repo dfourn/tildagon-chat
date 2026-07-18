@@ -7,6 +7,9 @@ section 15) without regressing the mesh propagation tests, which assert the
 propagation bound, not a magic tick count.
 """
 
+# --- app identity (keep in sync with tildagon.toml on each release) ---------
+APP_VERSION = "1.0.3"        # shown in the status bar; bump with tildagon.toml
+
 # --- protocol ---------------------------------------------------------------
 MAGIC_MSG = b"CH"            # chat message chunk advert
 MAGIC_PRESENCE = b"CP"       # chat presence beacon advert
