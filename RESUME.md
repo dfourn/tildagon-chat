@@ -1,7 +1,13 @@
 # RESUME — Chat app session state
 
-Snapshot of the 2026-07-18 debugging/feature session so any session (or person)
-can pick it up cold.
+Snapshot of the 2026-07-18 session so any session (or person) can pick it up
+cold. FINAL STATE: launch crash fixed; keebdexpansion typing + emote keys
+wired; UI rebuilt for the round screen; presets/backspace input fixes;
+9/9 host suites incl. test_hexkb.py; deployed to the badge; **published** as
+https://github.com/dfourn/tildagon-chat (public, `tildagon-app` topic,
+release v1.0.0, category Apps — store indexing was still pending at session
+end; if absent, check https://apps.badge.emfcamp.org/errors first).
+Next work: see PROMPT.md (known issues + enhancement backlog).
 
 ## What this covers
 
