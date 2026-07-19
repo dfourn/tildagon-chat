@@ -2,9 +2,28 @@
 
 Snapshot so any session (or person) can pick it up cold.
 
-**CURRENT (this session, 2026-07-18 evening): debugging "messages don't pass
-between 2 adjacent badges."** Prior session (launch crash + keebdex typing)
-is in the section at the bottom — that work shipped and is deployed.
+**CURRENT (2026-07-19): CONFIRMED WORKING on hardware.** Two-badge interop
+tested and messages pass both ways. Prior session (launch crash + keebdex
+typing) is in the section at the bottom — that work shipped and is deployed.
+
+## PUBLISHED v1.0.7 — removed per-badge channel switching (2026-07-19)
+
+Root cause of "messages don't pass between 2 badges" (the bug this whole
+session chased): the feed screen let UP/DOWN change a per-badge channel tag,
+persisted to `/flash/chat_channel.txt` — independent of any app redeploy, so
+`deploy-chat.sh` (which only wipes `/apps/chat`) never cleared it. One badge
+had drifted to channel 2 from earlier testing while the other stayed on 0.
+Presence beacons aren't channel-filtered (so `nr` still showed peers found),
+but `gossip.py`'s `messages(channel=...)` only displays messages matching the
+badge's own channel — so sends were gossiping and being stored fine, just
+never shown.
+
+Fix: removed the channel-switching UI, `_set_channel`, `CHANNEL_PATH`
+persistence, and `NUM_CHANNELS` entirely. Every badge now hardcodes channel 0
+— a single shared channel, no way for two badges to silently diverge again.
+`config.py`/`tildagon.toml` bumped `1.0.6` -> `1.0.7`. Host suite 10/10 PASS.
+**Verified live on two physical badges** after this fix: `nr` showed 1 and a
+message sent from one badge appeared on the other.
 
 ## PUBLISHED v1.0.5 — set_payload retries on a failed re-issue (2026-07-19)
 
