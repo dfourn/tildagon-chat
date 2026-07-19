@@ -6,6 +6,25 @@ Snapshot so any session (or person) can pick it up cold.
 between 2 adjacent badges."** Prior session (launch crash + keebdex typing)
 is in the section at the bottom — that work shipped and is deployed.
 
+## PUBLISHED v1.0.5 — set_payload retries on a failed re-issue (2026-07-19)
+
+Follow-up fix found during a code review of v1.0.2–v1.0.4 (commit `02a4ea1`,
+release `v1.0.5`). The v1.0.2 stop-then-reissue fix in `BLESync.set_payload`
+committed `self._payload = payload` unconditionally, even when the re-issue
+itself raised. Consequence: a failed re-issue left the radio broadcasting
+**nothing**, and the next tick's `==` short-circuit meant it wouldn't retry
+until a *different* payload came through — worse than the pre-v1.0.2
+behaviour (stale-but-present advert on failure).
+
+Fix: `self._payload` is now only committed after both `gap_advertise` calls
+succeed, so a failed re-issue retries on the very next tick with the same
+payload instead of going dark.
+
+`config.py`/`tildagon.toml` bumped `1.0.4` -> `1.0.5`. Host suite 10/10 PASS,
+smoke test clean. **Same hardware caveat as every radio change this
+session: NOT YET PROVEN ON HARDWARE** — needs the two-badge interop test.
+No protocol change, so v1.0.2–v1.0.4 badges still interop.
+
 ## ⚠️ Root-cause reassessment (23:37, supersedes the "Root cause found" section)
 
 **The original "version mismatch" diagnosis (below) was WRONG or incomplete.**
