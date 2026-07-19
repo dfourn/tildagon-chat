@@ -304,8 +304,8 @@ class BLESync(Sync):
     def set_payload(self, payload):
         if payload == self._payload:
             return
-        self._payload = payload
         if not self.active or self._ble is None:
+            self._payload = payload
             return
         try:
             # Stop the current advert before re-issuing with new data. Some
@@ -316,7 +316,12 @@ class BLESync(Sync):
             self._ble.gap_advertise(
                 self._adv_interval_us, adv_data=payload, connectable=False)
         except Exception:
-            pass
+            # Leave self._payload stale (not updated to the failed value) so
+            # the next tick's set_payload(payload) doesn't short-circuit on
+            # the == check above -- it retries the stop+reissue instead of
+            # leaving the radio silent until a *different* payload comes in.
+            return
+        self._payload = payload
 
     def drain(self):
         # Reference swap (not a copy): we hand the caller the current list and
