@@ -77,17 +77,14 @@ class ChatApp(app.App):
         # identity
         self.bid = hw.badge_id()
         nick = (hw.read_text(config.NICK_PATH) or "").strip()
-        # channel tag persisted as a small int string (0 = proximity room)
-        try:
-            channel = int(hw.read_text(config.CHANNEL_PATH) or "0")
-        except (TypeError, ValueError):
-            channel = 0
-        channel &= 0x07
 
         # P2P transport: engine + radio bridge. make_sync() picks SimSync in
         # the simulator, BLESync on hardware (guarded by the firmware floor).
+        # Single shared channel for all badges (0) -- no per-badge channel
+        # switching, so two badges can never silently drift onto different
+        # channels and stop seeing each other's messages.
         self.engine = GossipEngine(self_id=self.bid, nick=nick or "anon",
-                                   channels_bitmap=(1 << channel))
+                                   channels_bitmap=1)
         self.bridge = RadioBridge(self.engine, make_sync())
         self._radio_ok = bool(self.bridge.start(now=hw.ticks_ms()))
         # LED ring: claimed only for the duration of a notify pulse; the
@@ -119,7 +116,7 @@ class ChatApp(app.App):
         self.screen = SPLASH
         self.preset_idx = 0
         self.kb.reset(nick if self._splash_next == SETUP else "")
-        self.channel = channel
+        self.channel = 0
 
     # --- input edges ---------------------------------------------------------
     def _poll_edges(self):
@@ -295,17 +292,7 @@ class ChatApp(app.App):
             self.preset_idx = (self.preset_idx - 1) % len(config.PRESETS)
         if pressed["RIGHT"]:
             self.preset_idx = (self.preset_idx + 1) % len(config.PRESETS)
-        # UP/DOWN change channel tag (cheap proximity-room switch)
-        if pressed["UP"]:
-            self._set_channel((self.channel + 1) % config.NUM_CHANNELS)
-        if pressed["DOWN"]:
-            self._set_channel((self.channel - 1) % config.NUM_CHANNELS)
         return True
-
-    def _set_channel(self, channel):
-        self.channel = channel & 0x07
-        self.engine.set_channels(1 << self.channel)
-        hw.write_text(config.CHANNEL_PATH, str(self.channel))
 
     def _update_compose(self, now, pressed):
         # CANCEL tap backspaces (in _drive_kb); CANCEL hold backs out to feed.
@@ -410,7 +397,7 @@ class ChatApp(app.App):
         ctx.move_to(0, 92).text("tap to continue")
 
     def _draw_status_bar(self, ctx):
-        """Top arc: radio diagnostics + nick + channel, centred at y=-92."""
+        """Top arc: radio diagnostics + nick, centred at y=-92."""
         now = hw.ticks_ms()
         ctx.font_size = config.FONT_SIZE_META
         ctx.text_align = ctx.CENTER
@@ -418,13 +405,11 @@ class ChatApp(app.App):
         ble_active = getattr(self.bridge.sync, "active", False)
         if self._radio_ok:
             ctx.rgb(*config.COL_MUTED)
-            line = "%d nr @%s ch%d" % (
-                len(self.bridge.peers(now)),
-                self.engine.nick[:8], self.channel)
+            line = "%d nr @%s" % (
+                len(self.bridge.peers(now)), self.engine.nick[:8])
         else:
             ctx.rgb(0.9, 0.4, 0.4)
-            line = "NO RADIO @%s ch%d" % (
-                self.engine.nick[:8], self.channel)
+            line = "NO RADIO @%s" % (self.engine.nick[:8],)
         ctx.move_to(0, -92).text(line)
         # Second diagnostic line: sync backend + BLE active + store size + id.
         # (The version lives on the launch splash, not here.)
@@ -472,7 +457,13 @@ class ChatApp(app.App):
                 "wait %ds to send" % ((cooldown + 999) // 1000))
         else:
             ctx.rgb(*config.COL_MUTED)
-            ctx.move_to(0, 90).text("OK=write  hold=preset  U/D=ch")
+            ctx.move_to(0, 90).text("OK=write  hold=preset  L/R=cycle")
+
+        # Persistent version footer -- the splash only shows for SPLASH_MS
+        # (or 0 frames if a launch button edge bleeds through), so this is
+        # the reliable way to confirm which build is on a badge.
+        ctx.rgb(*config.COL_MUTED)
+        ctx.move_to(0, 108).text("v" + config.APP_VERSION)
 
     def _draw_keyboard(self, ctx, prompt, submit_word, cancel_word):
         self._draw_status_bar(ctx)

@@ -8,7 +8,7 @@ propagation bound, not a magic tick count.
 """
 
 # --- app identity (keep in sync with tildagon.toml on each release) ---------
-APP_VERSION = "1.0.5"        # shown on the launch splash; bump with tildagon.toml
+APP_VERSION = "1.0.7"        # shown on the launch splash + feed footer; bump with tildagon.toml
 SPLASH_MS = 1500             # how long the launch splash holds before auto-advance
 
 # --- protocol ---------------------------------------------------------------
@@ -44,9 +44,6 @@ RSSI_EMA = 0.25
 RSSI_NEAR_DBM = -40
 RSSI_FAR_DBM = -90
 
-# --- channels ---------------------------------------------------------------
-NUM_CHANNELS = 8
-
 # --- LED (no-strobe) --------------------------------------------------------
 LED_PULSE_MS = 400
 LED_NOTIFY_COALESCE_MS = 2000
@@ -56,7 +53,6 @@ LED_NOTIFY_COLOR = (36, 160, 120)  # 0-255 mint (dimmed COL_ACCENT); notify blin
 
 # --- persistence ------------------------------------------------------------
 NICK_PATH = "/flash/chat_nick.txt"       # remembered across launches
-CHANNEL_PATH = "/flash/chat_channel.txt"  # last channel tag
 CACHE_PATH = "/flash/chat_cache.json"     # optional gossip cache (off by default)
 
 # --- input ------------------------------------------------------------------
